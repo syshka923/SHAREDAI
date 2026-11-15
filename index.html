@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Чат нейросетей</title>
+<style>
+:root{--bg:#0e1820;--panel:#15232d;--field:#0e1820;--line2:#263945;--text:#e6edf2;--muted:#8fa3b0;--me:#2f6f8f;--accent:#5ec2f2}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font:16px/1.45 "Segoe UI",system-ui,sans-serif;display:flex;flex-direction:column;max-width:780px;margin:0 auto}
+header{padding:12px 14px;background:var(--panel);border-bottom:1px solid var(--line2);display:grid;gap:8px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+h1{font-size:1.15rem;margin:0;font-weight:650}
+.tabs{display:flex;gap:6px}
+section{display:grid;gap:8px}
+.pair{display:grid;grid-template-columns:1fr auto;gap:8px}
+input,button{font:inherit;color:inherit;border-radius:10px;border:1px solid var(--line2);background:var(--field);padding:9px 12px;min-width:0}
+input[type=checkbox]{width:auto;padding:0;margin-right:6px}
+input:disabled{opacity:.55}
+button{cursor:pointer;background:var(--me);border-color:transparent;font-weight:600}
+button:hover{filter:brightness(1.12)}
+button.ghost{background:transparent;border-color:var(--line2);color:var(--muted);font-weight:400;padding:6px 12px}
+button.ghost.on{color:var(--text);border-color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.chk{color:var(--muted);font-size:.9rem}
+details{border:1px solid var(--line2);border-radius:10px;padding:8px 12px}
+summary{cursor:pointer;color:var(--muted)}
+.set{display:grid;gap:8px;margin-top:10px}
+.hint{color:var(--muted);font-size:.88rem;margin:0}
+.bot{display:grid;grid-template-columns:130px 1fr;gap:8px;align-items:center}
+.room{display:flex;gap:10px;align-items:center;flex-wrap:wrap;border:1px dashed var(--line2);border-radius:10px;padding:8px 12px}
+.room b{font-size:1.25rem;letter-spacing:2px;color:var(--accent)}
+#peers{color:var(--muted);font-size:.9rem}
+#log{flex:1;overflow-y:auto;padding:16px 14px;display:flex;flex-direction:column;gap:12px}
+.row{display:flex;gap:10px;align-items:flex-end;max-width:88%}
+.row.me{align-self:flex-end;flex-direction:row-reverse}
+.av{flex:none;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-weight:700;color:#0e1820;background:var(--c)}
+.bub{padding:8px 13px;border-radius:16px 16px 16px 4px;background:var(--panel);border:1px solid var(--line2);overflow-wrap:anywhere}
+.me .bub{background:var(--me);border-color:transparent;border-radius:16px 16px 4px 16px}
+.bub b{display:block;font-size:.8rem;color:var(--c);margin-bottom:1px}
+.me .bub b{color:#d4ecf7}
+.note{align-self:center;color:var(--muted);font-size:.9rem;text-align:center;max-width:90%}
+.err{color:#ff9a9a}
+footer{display:flex;gap:8px;padding:12px 14px;background:var(--panel);border-top:1px solid var(--line2)}
+footer input{flex:1}
+@media (max-width:560px){.bot{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:no-preference){.row{animation:in .18s ease-out}@keyframes in{from{opacity:0;transform:translateY(4px)}}}
+</style>
+</head>
+<body>
+<header>
+  <div class="top"><h1>Чат нейросетей</h1>
+    <div class="tabs"><button id="tabHost" class="ghost on">Создать комнату</button><button id="tabGuest" class="ghost">Войти в комнату</button></div>
+  </div>
+
+  <section id="hostBox">
+    <div class="pair"><input id="key" type="password" placeholder="Ключ Gemini API" autocomplete="off" aria-label="Ключ Gemini API"><button id="go">Старт</button></div>
+    <label class="chk"><input type="checkbox" id="rem">Запомнить ключ на этом устройстве</label>
+    <input id="topic" placeholder="Тема разговора (необязательно)" aria-label="Тема разговора">
+    <details>
+      <summary>Настройки: имена и характеры (необязательно)</summary>
+      <div class="set">
+        <p class="hint">Всё можно оставить пустым, тогда будут значения по умолчанию. Менять можно до старта.</p>
+        <input id="me" aria-label="Твоё имя">
+        <div class="bot"><input id="bn0" aria-label="Имя первого"><input id="bc0" aria-label="Характер первого"></div>
+        <div class="bot"><input id="bn1" aria-label="Имя второго"><input id="bc1" aria-label="Характер второго"></div>
+        <div class="bot"><input id="bn2" aria-label="Имя третьего"><input id="bc2" aria-label="Характер третьего"></div>
+      </div>
+    </details>
+    <div class="room">
+      <span>Комната:</span><b id="code">…</b>
+      <button id="copy" class="ghost">Скопировать ссылку для друга</button>
+      <button id="reset" class="ghost">Заново</button>
+      <span id="peers"></span>
+    </div>
+  </section>
+
+  <section id="guestBox" hidden>
+    <div class="pair"><input id="gname" placeholder="Твоё имя" aria-label="Твоё имя"><input id="gcode" placeholder="Код комнаты" aria-label="Код комнаты" autocapitalize="off"></div>
+    <button id="join">Войти</button>
+  </section>
+</header>
+<div id="log" aria-live="polite"></div>
+<footer>
+  <input id="say" placeholder="Напиши в чат…" aria-label="Твоё сообщение">
+  <button id="send">Отправить</button>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script>
+/* ====== НАСТРОЙКИ ПО УМОЛЧАНИЮ (можно менять) ====== */
+const MODELS = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.6-flash"];
+const DELAY_MS = 12000;
+const DEFAULT_ME = "Гость";
+const DEFAULTS = [
+  {name: "Алекс", persona: "энергичный оптимист, обожает идеи и планы, шутит по-доброму.", color: "#5ec2f2"},
+  {name: "Боб",   persona: "ворчливый скептик с сухим юмором, всё проверяет и спорит по делу.", color: "#f0a35e"},
+  {name: "Марк",  persona: "спокойный любопытный мечтатель, задаёт неожиданные вопросы и любит сравнения.", color: "#b79cf5"}
+];
+const PREFIX = "gchat7-";
+/* =================================================== */
+
+const $ = id => document.getElementById(id);
+const FIELDS = ["me", "bn0", "bn1", "bn2", "bc0", "bc1", "bc2"];
+let mode = "host", peer = null, guests = [], conn = null, guestName = "", gTyping = null, joined = false;
+let history = [], bots = [], running = false, busy = false, started = false, timer = null, lastBot = null, mi = 0, lastKick = 0;
+
+$("me").placeholder = DEFAULT_ME + " (твоё имя)";
+DEFAULTS.forEach((d, i) => { $("bn" + i).placeholder = d.name; $("bc" + i).placeholder = d.persona; });
+try {
+  const s = JSON.parse(localStorage.getItem("chatcfg") || "{}");
+  if (s.key) { $("key").value = s.key; $("rem").checked = true; }
+  FIELDS.forEach(f => { if (s[f]) $(f).value = s[f]; });
+  if (s.topic) $("topic").value = s.topic;
+} catch(e) {}
+
+/* ---------- отрисовка ---------- */
+function note(text, cls) {
+  const d = document.createElement("div");
+  d.className = "note " + (cls || ""); d.textContent = text;
+  $("log").appendChild(d); $("log").scrollTop = $("log").scrollHeight;
+  return d;
+}
+function myName() { return mode === "host" ? meName() : guestName; }
+function renderMsg(who, text, human, color) {
+  const mine = human && who === myName();
+  const c = human ? (mine ? "#cfe9f5" : "#8fd6a3") : (color || "#888");
+  const r = document.createElement("div");
+  r.className = "row" + (mine ? " me" : "");
+  r.style.setProperty("--c", c);
+  const a = document.createElement("div"); a.className = "av"; a.textContent = who.charAt(0).toUpperCase();
+  const b = document.createElement("div"); b.className = "bub";
+  const n = document.createElement("b"); n.textContent = mine ? "Ты" : who;
+  const t = document.createElement("span"); t.textContent = text;
+  b.append(n, t); r.append(a, b);
+  $("log").appendChild(r); $("log").scrollTop = $("log").scrollHeight;
+}
+
+/* ---------- ХОЗЯИН ---------- */
+function meName() { return $("me").value.trim() || DEFAULT_ME; }
+function bc(o) { guests.forEach(g => { try { g.conn.send(o); } catch(e) {} }); }
+function say(text, cls) { note(text, cls); bc({t: "note", text, cls}); }
+function humansList() { return [meName()].concat(guests.map(g => g.name)); }
+function updatePeers() { $("peers").textContent = guests.length ? "В комнате: " + guests.map(g => g.name).join(", ") : "Гостей пока нет"; }
+function setRunning(v) { running = v; $("go").textContent = v ? "Пауза" : (started ? "Продолжить" : "Старт"); }
+function lock(v) { FIELDS.forEach(f => $(f).disabled = v); }
+
+function buildCfg() {
+  const used = [meName().toLowerCase()];
+  bots = DEFAULTS.map((d, i) => {
+    let name = $("bn" + i).value.trim() || d.name;
+    if (used.includes(name.toLowerCase())) name += " " + (i + 1);
+    used.push(name.toLowerCase());
+    return {name, persona: $("bc" + i).value.trim() || d.persona, color: d.color};
+  });
+}
+function uniqName(n) {
+  n = (n || DEFAULT_ME).slice(0, 24);
+  const taken = () => [meName()].concat(guests.map(g => g.name), bots.map(b => b.name), DEFAULTS.map(d => d.name)).some(x => x.toLowerCase() === n.toLowerCase());
+  let k = 2, base = n;
+  while (taken()) n = base + " " + (k++);
+  return n;
+}
+
+function initHost() {
+  if (typeof Peer === "undefined") { note("Не загрузился модуль связи (нужен интернет). Обнови страницу.", "err"); return; }
+  const code = Math.random().toString(36).slice(2, 7);
+  $("code").textContent = "…";
+  peer = new Peer(PREFIX + code);
+  peer.on("open", () => { $("code").textContent = code; updatePeers(); });
+  peer.on("error", e => {
+    if (e.type === "unavailable-id") { peer.destroy(); initHost(); }
+    else note("Не получилось создать комнату (" + e.type + "). Обнови страницу.", "err");
+  });
+  peer.on("connection", c => {
+    c.on("data", d => {
+      if (!d || typeof d !== "object") return;
+      if (d.t === "hello") {
+        if (guests.length >= 5) { c.send({t: "full"}); setTimeout(() => c.close(), 300); return; }
+        const name = uniqName(String(d.name || ""));
+        guests.push({conn: c, name});
+        c.send({t: "init", name, history});
+        say(name + " вошёл в чат");
+        updatePeers();
+      } else if (d.t === "say") {
+        const g = guests.find(x => x.conn === c); if (!g) return;
+        const text = String(d.text || "").trim().slice(0, 500); if (!text) return;
+        addHuman(g.name, text);
+      }
+    });
+    c.on("close", () => {
+      const g = guests.find(x => x.conn === c); if (!g) return;
+      guests = guests.filter(x => x !== g); say(g.name + " вышел из чата"); updatePeers();
+    });
+  });
+}
+
+function addHuman(who, text) {
+  history.push({who, text, human: true});
+  bc({t: "msg", who, text, human: true});
+  renderMsg(who, text, true);
+  lastBot = null;
+  if (!running) {
+    if (started || $("key").value.trim()) start();
+    else say("Чтобы боты ответили, хозяин должен вставить ключ и нажать «Старт».", "err");
+  } else if (Date.now() - lastKick > 5000) {
+    lastKick = Date.now(); clearTimeout(timer); if (!busy) timer = setTimeout(tick, 400);
+  }
+}
+
+async function ask(bot) {
+  const others = bots.filter(b => b !== bot).map(b => b.name).join(", ");
+  const hs = humansList();
+  const who = hs.length > 1 ? "людьми по имени " + hs.join(" и ") : "человеком по имени " + hs[0];
+  const lines = history.slice(-30).map(m => m.who + ": " + m.text).join("\n");
+  const topic = $("topic").value.trim() || "свободная беседа";
+  const system = "Ты " + bot.name + " — участник группового чата с " + others + " и " + who + ". " +
+    "Твой характер: " + bot.persona + " Пиши только свою реплику: 1–3 коротких предложения по-русски, как в живом чате. " +
+    "Не начинай с собственного имени, не пиши за других, не повторяй уже сказанное. " +
+    "Реагируй на последние сообщения и иногда обращайся к собеседникам по имени. Если пишет человек, отвечай ему в первую очередь.";
+  const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + MODELS[mi] + ":generateContent", {
+    method: "POST",
+    headers: {"Content-Type": "application/json", "x-goog-api-key": $("key").value.trim()},
+    body: JSON.stringify({
+      systemInstruction: {parts: [{text: system}]},
+      contents: [{role: "user", parts: [{text: "Тема: " + topic + "\n\nПереписка:\n" + (lines || "(пока пусто, начни разговор)") + "\n\nТвоя реплика (" + bot.name + "):"}]}],
+      generationConfig: {maxOutputTokens: 1500}
+    }),
+    signal: AbortSignal.timeout(40000)
+  });
+  if (!r.ok) {
+    let m = ""; try { m = (await r.json()).error.message; } catch(e) {}
+    throw {status: r.status, msg: m};
+  }
+  const data = await r.json();
+  let t = ((data.candidates && data.candidates[0].content.parts.map(p => p.text || "").join("")) || "").trim();
+  if (t.toLowerCase().startsWith(bot.name.toLowerCase() + ":")) t = t.slice(bot.name.length + 1).trim();
+  return t;
+}
+
+async function tick() {
+  if (!running || busy) return;
+  busy = true;
+  const pool = bots.filter(b => b !== lastBot);
+  const bot = pool[Math.floor(Math.random() * pool.length)];
+  const typing = note(bot.name + " печатает… 0 с");
+  bc({t: "typing", who: bot.name});
+  let sec = 0;
+  const iv = setInterval(() => { typing.textContent = bot.name + " печатает… " + (++sec) + " с"; }, 1000);
+  const done = () => { clearInterval(iv); typing.remove(); bc({t: "typing_end"}); };
+  try {
+    const text = await ask(bot);
+    done();
+    if (text) {
+      history.push({who: bot.name, text, human: false, color: bot.color});
+      bc({t: "msg", who: bot.name, text, human: false, color: bot.color});
+      renderMsg(bot.name, text, false, bot.color); lastBot = bot;
+    }
+  } catch (e) {
+    done();
+    const s = e && e.status;
+    if ((s === 404 || s === 503 || (e && e.name === "TimeoutError")) && mi < MODELS.length - 1) {
+      mi++; say("Модель не ответила, переключаюсь на " + MODELS[mi] + ".");
+      busy = false; if (running) timer = setTimeout(tick, 1500); return;
+    }
+    setRunning(false);
+    say(s === 429 ? "Достигнут бесплатный лимит. Подожди минуту и нажми «Продолжить»."
+      : (s === 400 || s === 403) ? "Ключ не подошёл. Проверь, что он вставлен целиком, без пробелов."
+      : "Не получилось получить ответ от Gemini. Подробности: " + (s ? "код " + s + ". " + (e.msg || "") : String(e)), "err");
+  }
+  busy = false;
+  if (running) timer = setTimeout(tick, DELAY_MS);
+}
+
+function start() {
+  if (!$("key").value.trim()) { note("Сначала вставь ключ Gemini API в поле сверху.", "err"); return; }
+  if (!started) { buildCfg(); started = true; lock(true); $("log").querySelectorAll(".welcome").forEach(n => n.remove()); }
+  try {
+    const s = {topic: $("topic").value};
+    if ($("rem").checked) s.key = $("key").value.trim();
+    FIELDS.forEach(f => s[f] = $(f).value);
+    localStorage.setItem("chatcfg", JSON.stringify(s));
+  } catch(e) {}
+  setRunning(true); clearTimeout(timer); tick();
+}
+$("go").onclick = () => { if (running) { setRunning(false); clearTimeout(timer); } else start(); };
+$("reset").onclick = () => {
+  clearTimeout(timer);
+  history = []; started = false; lastBot = null; busy = false;
+  setRunning(false); lock(false); $("log").innerHTML = ""; bc({t: "reset"}); welcome();
+};
+$("copy").onclick = async () => {
+  const code = $("code").textContent;
+  if (code === "…") return;
+  const link = location.href.split("#")[0] + "#" + code;
+  try { await navigator.clipboard.writeText(link); note("Ссылка скопирована. Отправь её другу. Код комнаты: " + code); }
+  catch(e) { note("Ссылка для друга: " + link); }
+};
+
+/* ---------- ГОСТЬ ---------- */
+function clearTyping() { if (gTyping) { gTyping.remove(); gTyping = null; } }
+function join() {
+  const code = $("gcode").value.trim().toLowerCase();
+  if (!code) { note("Введи код комнаты.", "err"); return; }
+  if (typeof Peer === "undefined") { note("Не загрузился модуль связи (нужен интернет). Обнови страницу.", "err"); return; }
+  if (peer) { peer.destroy(); peer = null; }
+  joined = false;
+  const name = $("gname").value.trim() || DEFAULT_ME;
+  note("Подключаюсь…");
+  peer = new Peer();
+  peer.on("open", () => {
+    conn = peer.connect(PREFIX + code, {reliable: true});
+    conn.on("open", () => conn.send({t: "hello", name}));
+    conn.on("data", d => gHandle(d));
+    conn.on("close", () => { if (joined) { joined = false; note("Связь с хозяином потеряна. Нажми «Войти» ещё раз.", "err"); } });
+    setTimeout(() => { if (!joined) note("Не получилось подключиться. Проверь код и попроси хозяина держать страницу открытой.", "err"); }, 15000);
+  });
+  peer.on("error", e => note(e.type === "peer-unavailable" ? "Комната не найдена. Проверь код: хозяин должен держать страницу открытой." : "Ошибка связи (" + e.type + ").", "err"));
+}
+function gHandle(d) {
+  if (!d || typeof d !== "object") return;
+  if (d.t === "init") {
+    joined = true; guestName = d.name; $("log").innerHTML = "";
+    (d.history || []).forEach(h => renderMsg(h.who, h.text, h.human, h.color));
+    note("Ты в комнате как «" + guestName + "». Пиши в поле внизу.");
+  } else if (d.t === "msg") { clearTyping(); renderMsg(d.who, d.text, d.human, d.color); }
+  else if (d.t === "typing") { clearTyping(); gTyping = note(d.who + " печатает…"); }
+  else if (d.t === "typing_end") clearTyping();
+  else if (d.t === "note") note(d.text, d.cls);
+  else if (d.t === "reset") { $("log").innerHTML = ""; note("Хозяин начал чат заново."); }
+  else if (d.t === "full") note("В комнате уже много людей.", "err");
+}
+$("join").onclick = join;
+
+/* ---------- общее ---------- */
+function setMode(m) {
+  if (peer) { peer.destroy(); peer = null; }
+  guests = []; conn = null; joined = false; gTyping = null;
+  mode = m;
+  $("hostBox").hidden = m !== "host"; $("guestBox").hidden = m !== "guest";
+  $("tabHost").classList.toggle("on", m === "host"); $("tabGuest").classList.toggle("on", m === "guest");
+  $("log").innerHTML = ""; welcome();
+  if (m === "host") { history = []; started = false; setRunning(false); lock(false); initHost(); }
+}
+$("tabHost").onclick = () => { if (mode !== "host") setMode("host"); };
+$("tabGuest").onclick = () => { if (mode !== "guest") setMode("guest"); };
+
+function send() {
+  const t = $("say").value.trim();
+  if (!t) return;
+  if (mode === "host") {
+    if (!$("key").value.trim()) { note("Сначала вставь ключ Gemini API в поле сверху.", "err"); return; }
+    $("say").value = ""; addHuman(meName(), t);
+  } else {
+    if (!joined) { note("Сначала войди в комнату.", "err"); return; }
+    $("say").value = ""; conn.send({t: "say", text: t});
+  }
+}
+$("send").onclick = send;
+$("say").addEventListener("keydown", e => { if (e.key === "Enter") send(); });
+
+function welcome() {
+  note(mode === "host"
+    ? "Версия 7. Вставь ключ, нажми «Старт», а другу отправь ссылку (кнопка «Скопировать ссылку для друга»)."
+    : "Введи своё имя и код комнаты, который дал хозяин, и нажми «Войти».", "welcome");
+}
+const h = location.hash.replace("#", "").trim().toLowerCase();
+if (h) { $("gcode").value = h; setMode("guest"); } else { welcome(); initHost(); }
+</script>
+</body>
+</html>
